@@ -23,6 +23,8 @@ import {
   unpackAccount,
   getTransferFeeAmount,
   withdrawWithheldTokensFromAccounts,
+  harvestWithheldTokensToMint,
+  withdrawWithheldTokensFromMint,
 } from "@solana/spl-token";
 
 describe("Test Wallets", () => {
@@ -44,64 +46,64 @@ describe("Test Wallets", () => {
     console.log(`\n`);
   });
 
-  it("Create and Close Mint Account", async () => {
-    const mintKeypair = Keypair.generate();
-    const mint = mintKeypair.publicKey;
+  // it("Create and Close Mint Account", async () => {
+  //   const mintKeypair = Keypair.generate();
+  //   const mint = mintKeypair.publicKey;
 
-    const extensions = [ExtensionType.MintCloseAuthority];
-    const mintLen = getMintLen(extensions);
-    const lamports = await connection.getMinimumBalanceForRentExemption(
-      mintLen
-    );
+  //   const extensions = [ExtensionType.MintCloseAuthority];
+  //   const mintLen = getMintLen(extensions);
+  //   const lamports = await connection.getMinimumBalanceForRentExemption(
+  //     mintLen
+  //   );
 
-    // Create transaction with instructions to create new mint account with close authority
-    const transaction = new Transaction().add(
-      // Invoke system program to create account, transfer owner to token 2022 program
-      SystemProgram.createAccount({
-        fromPubkey: wallet_1.publicKey,
-        newAccountPubkey: mint,
-        space: mintLen,
-        lamports,
-        programId: TOKEN_2022_PROGRAM_ID,
-      }),
-      createInitializeMintCloseAuthorityInstruction(
-        mint,
-        wallet_1.publicKey, // close authority
-        TOKEN_2022_PROGRAM_ID
-      ),
-      createInitializeMintInstruction(
-        mint,
-        9,
-        wallet_1.publicKey, // mint authority
-        wallet_1.publicKey, // freeze authority
-        TOKEN_2022_PROGRAM_ID
-      )
-    );
+  //   // Create transaction with instructions to create new mint account with close authority
+  //   const transaction = new Transaction().add(
+  //     // Invoke system program to create account, transfer owner to token 2022 program
+  //     SystemProgram.createAccount({
+  //       fromPubkey: wallet_1.publicKey,
+  //       newAccountPubkey: mint,
+  //       space: mintLen,
+  //       lamports,
+  //       programId: TOKEN_2022_PROGRAM_ID,
+  //     }),
+  //     createInitializeMintCloseAuthorityInstruction(
+  //       mint,
+  //       wallet_1.publicKey, // close authority
+  //       TOKEN_2022_PROGRAM_ID
+  //     ),
+  //     createInitializeMintInstruction(
+  //       mint,
+  //       9,
+  //       wallet_1.publicKey, // mint authority
+  //       wallet_1.publicKey, // freeze authority
+  //       TOKEN_2022_PROGRAM_ID
+  //     )
+  //   );
 
-    const txSig = await sendAndConfirmTransaction(connection, transaction, [
-      wallet_1,
-      mintKeypair,
-    ]);
+  //   const txSig = await sendAndConfirmTransaction(connection, transaction, [
+  //     wallet_1,
+  //     mintKeypair,
+  //   ]);
 
-    console.log("Create New Mint Account with Close Authority");
-    console.log(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`);
-    console.log(`\n`);
+  //   console.log("Create New Mint Account with Close Authority");
+  //   console.log(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`);
+  //   console.log(`\n`);
 
-    // Close Mint Account
-    const txSig2 = await closeAccount(
-      connection,
-      wallet_1, // payer
-      mint,
-      wallet_1.publicKey, // destination (lamports from closed account sent to this address)
-      wallet_1.publicKey, // close authority
-      [],
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
+  //   // Close Mint Account
+  //   const txSig2 = await closeAccount(
+  //     connection,
+  //     wallet_1, // payer
+  //     mint,
+  //     wallet_1.publicKey, // destination (lamports from closed account sent to this address)
+  //     wallet_1.publicKey, // close authority
+  //     [],
+  //     undefined,
+  //     TOKEN_2022_PROGRAM_ID
+  //   );
 
-    console.log("Close Mint Account");
-    console.log(`https://explorer.solana.com/tx/${txSig2}?cluster=devnet`);
-  });
+  //   console.log("Close Mint Account");
+  //   console.log(`https://explorer.solana.com/tx/${txSig2}?cluster=devnet`);
+  // });
 
   it("Create Mint with Transfer Fee", async () => {
     const mintKeypair = Keypair.generate();
@@ -263,6 +265,55 @@ describe("Test Wallets", () => {
 
     console.log("Withdraw Fees");
     console.log(`https://explorer.solana.com/tx/${txSig3}?cluster=devnet`);
+    console.log(`\n`);
+
+    // Transfer tokens (with fee) again
+    const txSig4 = await transferCheckedWithFee(
+      connection,
+      wallet_1, //payer
+      sourceAccount,
+      mint,
+      destinationAccount,
+      wallet_1.publicKey, // owner of source token account
+      transferAmount,
+      decimals,
+      fee,
+      [],
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    console.log("Transfer Tokens with Fee Again");
+    console.log(`https://explorer.solana.com/tx/${txSig4}?cluster=devnet`);
+    console.log(`\n`);
+
+    // Transfer withdraw withheld fees from token account to mint
+    const txSig5 = await harvestWithheldTokensToMint(
+      connection,
+      wallet_1, // payer
+      mint,
+      [destinationAccount],
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    console.log("Harvest Fee from Token Account");
+    console.log(`https://explorer.solana.com/tx/${txSig5}?cluster=devnet`);
+    console.log(`\n`);
+
+    const txSig6 = await withdrawWithheldTokensFromMint(
+      connection,
+      wallet_1, // payer
+      mint,
+      destinationAccount,
+      wallet_1.publicKey, // withdraw authority
+      [],
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    console.log("Withdraw Fees from Mint Account");
+    console.log(`https://explorer.solana.com/tx/${txSig6}?cluster=devnet`);
     console.log(`\n`);
   });
 });
